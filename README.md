@@ -166,9 +166,7 @@ RecursiveCharacterTextSplitter(
 ```
 
 ### Reasoning
-- Preserves semantic structure better than fixed-size splitting
-- Reduces information loss near chunk boundaries
-- Serves as a strong baseline for future evaluation
+- Default chunking used in tutorial videos
 
 ### Future Work
 - Compare against alternative chunk sizes
@@ -187,9 +185,7 @@ OpenAIEmbeddings(
 ```
 
 ### Reasoning
-- Strong semantic retrieval performance
 - Easy integration with LangChain
-- Widely used in production RAG systems
 
 ### Tradeoff
 - Requires API usage and associated cost
@@ -251,9 +247,7 @@ llama-3.1-8b-instant
 via Groq
 
 ### Reasoning
-- Fast inference
 - Cost-effective
-- Good instruction-following capability
 
 ---
 
