@@ -6,9 +6,12 @@ import numpy as np
 
 #Data Ingestion
 from pathlib import Path
+from langchain_core.documents import Document
 from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pdf2image import convert_from_path
+import pytesseract
 
 # Vector Embedding And Vector Store
 from langchain_openai import OpenAIEmbeddings
@@ -25,7 +28,40 @@ from langchain_groq import ChatGroq
 import streamlit as st
 
 
+## Configure Tesseract
+pytesseract.pytesseract.tesseract_cmd = (
+    r"C:\Users\OmkarIngale\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+)
+
 ## Data ingestion
+
+def ocr_pdf(pdf_path):
+
+    pages = convert_from_path(
+        pdf_path,
+        dpi=300,
+        poppler_path=r"C:\poppler\poppler-26.02.0\Library\bin"
+    )
+
+    docs = []
+
+    for page_num, page in enumerate(pages):
+
+        text = pytesseract.image_to_string(
+            page,
+            config="--psm 6"
+        )
+
+        docs.append(
+            Document(
+                page_content=text,
+                metadata={
+                    "page": page_num + 1
+                }
+            )
+        )
+
+    return docs
 
 def data_ingestion(folder_path):
     documents = []
@@ -37,14 +73,32 @@ def data_ingestion(folder_path):
         try:
             if file_path.suffix.lower() == ".docx":
                 loader = Docx2txtLoader(str(file_path))
+                docs = loader.load()
 
             elif file_path.suffix.lower() == ".pdf":
-                loader = PyPDFLoader(str(file_path))
+                if (
+                    "success" in file_path.name.lower()
+                    and "bonus" in file_path.name.lower()
+                ):
+
+                    print(
+                        f"Using OCR for {file_path.name}"
+                    )
+
+                    docs = ocr_pdf(
+                        str(file_path)
+                    )
+
+                else:
+
+                    loader = PyPDFLoader(
+                        str(file_path)
+                    )
+
+                    docs = loader.load()
 
             else:
                 continue
-
-            docs = loader.load()
 
             # Add source metadata
             for doc in docs:
