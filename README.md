@@ -447,7 +447,7 @@ Document ingestion quality directly impacts retrieval performance. Before tuning
 ## Objectives
 
 - Create an evaluation dataset (10–15 representative HR questions)
-- Measure retrieval accuracy using Recall@K
+- Measure retrieval accuracy
 - Compare chunking strategies
 - Recommend the best chunking strategy based on empirical results
 
