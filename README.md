@@ -438,6 +438,7 @@ All other PDF documents continue to use the standard `PyPDFLoader` workflow.
 ### Key Learning
 
 Document ingestion quality directly impacts retrieval performance. Before tuning embeddings, chunk sizes, or prompts, it is important to verify that source documents are being extracted correctly. In this case, the primary retrieval issue originated from incomplete PDF text extraction rather than the retrieval or generation components of the RAG pipeline.
+
 ---
 
 
