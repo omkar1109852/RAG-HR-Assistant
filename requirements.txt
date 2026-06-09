@@ -16,3 +16,7 @@ transformers
 unstructured
 docx2txt
 streamlit
+pdf2image
+pytesseract
+pymupdf4llm
+langchain-experimental

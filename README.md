@@ -176,6 +176,17 @@ SemanticChunker(embeddings)
 - Semantic Chunking performed well on narrative content but struggled with structured HR documents containing tables, FAQs, and eligibility matrices.
 - Character Splitter (1000/100) performed surprisingly well but was less reliable on multi-condition and long-context questions.
 
+### Evaluation Artifacts
+
+The detailed evaluation results used for chunking strategy comparison are available in:
+
+`evaluation/chunking_strategy_evaluation.xlsx`
+
+The spreadsheet contains:
+- 30 benchmark questions
+- Ideal answers
+- Responses from each chunking strategy
+
 ### Conclusion
 
 The **Recursive Character Splitter (1000/100)** was selected as the production chunking strategy because it achieved the highest overall retrieval accuracy while maintaining a good balance between context preservation and retrieval precision.
