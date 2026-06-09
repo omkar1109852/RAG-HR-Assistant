@@ -109,3 +109,73 @@ Example questions:
 * Re-run **Vectors Update** whenever documents are added, removed, or modified.
 * The FAISS index is stored locally in the `faiss_index/` directory.
 * Answers are generated only from retrieved document content.
+
+## Phase 2 – Chunking Strategy Evaluation
+
+### Objective
+
+Evaluate the impact of different chunking strategies on retrieval quality for the HR Policy RAG Assistant. The goal was to determine which chunking approach provides the best balance between context preservation and retrieval accuracy.
+
+### Chunking Strategies Evaluated
+
+#### 1. Recursive Character Splitter (1000/100)
+```python
+RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+```
+
+#### 2. Recursive Character Splitter (500/50)
+```python
+RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+```
+
+#### 3. Recursive Character Splitter (1500/150)
+```python
+RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+```
+
+#### 4. Character Splitter (1000/100)
+```python
+CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+```
+
+#### 5. Semantic Chunker
+```python
+SemanticChunker(embeddings)
+```
+
+### Evaluation Methodology
+
+- Evaluated all chunking strategies on the same corpus of HR policies, FAQs, and compensation documents.
+- Created a benchmark of 30 representative HR-related questions covering:
+  - Eligibility rules
+  - Leave policies
+  - Compensation and bonuses
+  - Holiday policies
+  - Bereavement and jury duty policies
+  - Table-based and multi-condition questions
+- Scoring rubric:
+  - **1.0** = Complete and correct answer
+  - **0.5** = Partially correct answer
+  - **0.0** = Incorrect answer or retrieval failure
+
+### Results
+
+| Strategy | Score | Accuracy |
+|-----------|--------|-----------|
+| Recursive Character Splitter (1000/100) | 24.5 / 30 | 81.7% |
+| Character Splitter (1000/100) | 22.5 / 30 | 75.0% |
+| Recursive Character Splitter (500/50) | 19.5 / 30 | 65.0% |
+| Semantic Chunker | 18.5 / 30 | 61.7% |
+| Recursive Character Splitter (1500/150) | 18.0 / 30 | 60.0% |
+
+### Key Findings
+
+- **Recursive Character Splitter (1000/100)** achieved the best overall performance and provided the most consistent retrieval quality across different document types.
+- Smaller chunks (500/50) often fragmented policy sections and eligibility tables, resulting in incomplete answers.
+- Larger chunks (1500/150) preserved context but reduced retrieval precision.
+- Semantic Chunking performed well on narrative content but struggled with structured HR documents containing tables, FAQs, and eligibility matrices.
+- Character Splitter (1000/100) performed surprisingly well but was less reliable on multi-condition and long-context questions.
+
+### Conclusion
+
+The **Recursive Character Splitter (1000/100)** was selected as the production chunking strategy because it achieved the highest overall retrieval accuracy while maintaining a good balance between context preservation and retrieval precision.
