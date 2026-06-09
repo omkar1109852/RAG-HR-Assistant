@@ -190,3 +190,40 @@ The spreadsheet contains:
 ### Conclusion
 
 The **Recursive Character Splitter (1000/100)** was selected as the production chunking strategy because it achieved the highest overall retrieval accuracy while maintaining a good balance between context preservation and retrieval precision.
+
+## Phase 3 – Conversational RAG
+
+### Objective
+
+Enhance the HR Assistant to support multi-turn conversations and follow-up questions.
+
+### Implementation
+
+Implemented conversational memory using:
+
+- Streamlit Session State
+- LangChain Chat History
+- History-Aware Retriever
+- Retrieval Chain
+
+The chatbot maintains conversation context and reformulates follow-up questions into standalone queries before retrieval.
+
+### Example
+
+User:
+What is bonus eligible earnings?
+
+User:
+Why are they different from my current salary?
+
+The history-aware retriever reformulates the second question into:
+
+"Why are bonus eligible earnings different from my current salary?"
+
+before retrieving relevant documents.
+
+### Benefits
+
+- Improved retrieval quality for follow-up questions.
+- Better user experience.
+- Reduced ambiguity in conversational queries.
