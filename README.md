@@ -190,3 +190,283 @@ The spreadsheet contains:
 ### Conclusion
 
 The **Recursive Character Splitter (1000/100)** was selected as the production chunking strategy because it achieved the highest overall retrieval accuracy while maintaining a good balance between context preservation and retrieval precision.
+
+
+## Phase 3 – Conversational RAG
+
+### Objective
+
+Enhance the HR Assistant to support multi-turn conversations and follow-up questions.
+
+### Implementation
+
+Implemented conversational memory using:
+
+- Streamlit Session State
+- LangChain Chat History
+- History-Aware Retriever
+- Retrieval Chain
+
+The chatbot maintains conversation context and reformulates follow-up questions into standalone queries before retrieval.
+
+### Example
+
+User:
+What is bonus eligible earnings?
+
+User:
+Why are they different from my current salary?
+
+The history-aware retriever reformulates the second question into:
+
+"Why are bonus eligible earnings different from my current salary?"
+
+before retrieving relevant documents.
+
+### Benefits
+
+- Improved retrieval quality for follow-up questions.
+- Better user experience.
+- Reduced ambiguity in conversational queries.
+
+
+## Phase 4 – Agentic Orchestration with LangGraph
+
+### Objective
+
+Re-architect the HR Assistant as a LangGraph workflow that intelligently routes user queries based on intent while maintaining a shared conversational state.
+
+The goal of this phase was to move beyond a single retrieval pipeline and introduce decision-making into the application. Depending on the user's query, the system determines whether retrieval from HR documents is required or whether the question can be answered through normal conversation.
+
+---
+
+## Architecture
+
+```text
+START
+  ↓
+Router Node
+  ↓
+ ┌─────────────┬─────────────┐
+ │             │
+HR Query   Casual Query
+ │             │
+ ↓             ↓
+HR Node    Casual Node
+ │             │
+ └──────┬──────┘
+        ↓
+       END
+```
+
+---
+
+## Graph Components
+
+### 1. Router Node
+
+The Router Node is responsible for classifying incoming user queries into one of two categories:
+
+- `hr`
+- `casual`
+
+The router uses an LLM-based classification prompt with examples and routing rules.
+
+Examples:
+
+| Query | Route |
+|---------|---------|
+| What is bonus eligible earnings? | HR |
+| How many days of parental leave do I get? | HR |
+| Can I bring my dog to the office? | HR |
+| Hello | Casual |
+| Thank you | Casual |
+| What was the first question I asked? | Casual |
+
+Routing Principle:
+
+> If there is any possibility that a query relates to employee policies, benefits, compensation, workplace rules, payroll, leave programs, or HR documentation, the query is routed to the HR branch.
+
+---
+
+### 2. HR Node
+
+The HR Node executes the Conversational RAG pipeline developed in Phase 3.
+
+Components:
+
+- FAISS Vector Store
+- OpenAI Embeddings (`text-embedding-3-large`)
+- History-Aware Retriever
+- Llama 3.1 (Groq)
+- Source Attribution
+
+Workflow:
+
+```text
+Question
+    ↓
+History-Aware Retriever
+    ↓
+FAISS Similarity Search
+    ↓
+Retrieved Documents
+    ↓
+LLM
+    ↓
+Grounded Answer
+```
+
+The node returns:
+
+- Answer
+- Source Documents
+
+---
+
+### 3. Casual Node
+
+The Casual Node handles:
+
+- Greetings
+- Small talk
+- Conversation history questions
+- General non-HR discussions
+
+Examples:
+
+- Hello
+- How are you?
+- Thank you
+- What was the first question I asked?
+
+No document retrieval is performed.
+
+The node uses conversation history to maintain context across turns.
+
+Workflow:
+
+```text
+Chat History
+     ↓
+LLM
+     ↓
+Response
+```
+
+The node returns:
+
+- Answer
+- No Sources
+
+---
+
+## Shared Conversation State
+
+A common graph state is maintained across all nodes.
+
+```python
+class GraphState(TypedDict):
+    question: str
+    answer: str
+    sources: list
+    chat_history: list
+    route: str
+```
+
+This ensures that both HR and Casual branches operate on the same conversation history.
+
+Benefits:
+
+- Follow-up questions work correctly.
+- Users can switch between HR and casual conversation seamlessly.
+- Context is preserved regardless of which branch processes the request.
+
+Example:
+
+```text
+User:
+What is paid parental leave?
+
+Assistant:
+...
+
+User:
+What is the time period within which I can use it?
+```
+
+The conversation history allows the system to understand that "it" refers to Paid Parental Leave.
+
+---
+
+## Routing Challenges
+
+One of the primary challenges in this phase was handling borderline questions.
+
+Examples:
+
+| Query | Expected Route |
+|---------|---------|
+| Can I bring my dog to the office? | HR |
+| What was the first question I asked? | Casual |
+| When can I use parental leave? | HR |
+| Tell me a joke | Casual |
+
+To improve routing accuracy:
+
+- Added domain-specific HR examples
+- Included leave, payroll, compensation and workplace-policy terminology
+- Configured the router to default to HR when uncertain
+
+This reduces the risk of answering HR policy questions without retrieval.
+
+---
+
+## Key Learnings
+
+### LangChain vs LangGraph
+
+Phase 3 used a single retrieval pipeline:
+
+```text
+User
+ ↓
+Retriever
+ ↓
+LLM
+ ↓
+Answer
+```
+
+Phase 4 introduces branching workflows:
+
+```text
+User
+ ↓
+Router
+ ↓
+HR? ──► Retrieval Pipeline
+ │
+ No
+ ▼
+Conversation Pipeline
+```
+
+LangGraph enables:
+
+- Explicit workflow orchestration
+- Conditional routing
+- Shared state management
+- Multi-path execution
+
+---
+
+## Outcome
+
+Successfully implemented an agentic HR assistant that:
+
+- Routes HR-related questions through Conversational RAG.
+- Routes non-HR questions through a conversational LLM path.
+- Maintains shared conversation history across all interactions.
+- Preserves source attribution for HR responses.
+- Demonstrates LangGraph-based orchestration and decision making.

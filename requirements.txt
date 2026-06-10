@@ -20,3 +20,4 @@ pdf2image
 pytesseract
 pymupdf4llm
 langchain-experimental
+langgraph

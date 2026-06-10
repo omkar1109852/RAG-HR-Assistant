@@ -3,6 +3,7 @@ import os
 import sys
 from dotenv import load_dotenv
 import numpy as np
+from typing import TypedDict
 
 #Data Ingestion
 from pathlib import Path
@@ -49,6 +50,11 @@ from langchain_core.prompts import (
     MessagesPlaceholder
 )
 
+#Graph
+from langgraph.graph import StateGraph
+from langgraph.graph import END
+from pydantic import BaseModel, Field
+from typing import Literal
 
 ## Configure Tesseract
 pytesseract.pytesseract.tesseract_cmd = (
@@ -58,6 +64,14 @@ pytesseract.pytesseract.tesseract_cmd = (
 ## Vector Embedding and vector store
 load_dotenv()
 embeddings=OpenAIEmbeddings(model="text-embedding-3-large")
+
+##Create a state for Langgraph
+class GraphState(TypedDict):
+    question: str
+    answer: str
+    sources: list
+    chat_history: list
+    route: str
 
 ## Data ingestion
 
@@ -263,6 +277,139 @@ def get_response_llm(vectorstore_faiss, query, chat_history):
         "sources": sources
     }
 
+##Router Node
+
+def router_node(state):
+
+    prompt = f"""
+You are an HR query router.
+
+Classify the query into ONE category.
+
+Return ONLY:
+
+hr
+casual
+
+HR includes:
+- leave policies
+- parental leave
+- caregiver leave
+- holidays
+- benefits
+- bonus programs
+- compensation
+- eligibility
+- workplace policies
+- employee rules
+- payroll
+- PTO
+- jury duty
+- bereavement leave
+
+Examples:
+
+Q: What is bonus eligible earnings?
+A: hr
+
+Q: How many caregiver leave days do I get?
+A: hr
+
+Q: When does paid parental leave expire?
+A: hr
+
+Q: What is the time period within which I can use paid parental leave?
+A: hr
+
+Q: What holidays do we observe?
+A: hr
+
+Q: Hello
+A: casual
+
+Q: Thank you
+A: casual
+
+Q: What was the first question I asked?
+A: casual
+
+User Question:
+{state["question"]}
+"""
+
+    response = llm.invoke(prompt)
+
+    return {
+        **state,
+        "route": response.content.strip().lower()
+    }
+
+##Create nodes
+def hr_node(state):
+    faiss_index = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+    result = get_response_llm(
+        faiss_index,
+        state["question"],
+        state["chat_history"]
+    )
+
+    st.session_state.last_sources = result["sources"]
+
+    return {
+        **state,
+        "answer": result["answer"],
+        "sources": result["sources"]
+    }
+
+def casual_node(state):
+
+    messages = []
+
+    for msg in state["chat_history"]:
+
+        if isinstance(msg, HumanMessage):
+
+            messages.append(
+                {
+                    "role": "user",
+                    "content": msg.content
+                }
+            )
+
+        elif isinstance(msg, AIMessage):
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": msg.content
+                }
+            )
+
+    messages.append(
+        {
+            "role": "user",
+            "content": state["question"]
+        }
+    )
+
+    response = llm.invoke(messages)
+
+    return {
+        **state,
+        "answer": response.content,
+        "sources": []
+    }
+
+##Routing Function
+def route_decision(state):
+
+    if state["route"] == "hr":
+        return "hr_node"
+
+    return "casual_node"
+
+
+
 def main():
     st.set_page_config("Chat PDF")
     
@@ -271,9 +418,36 @@ def main():
     if ("chat_history" not in st.session_state):
         st.session_state.chat_history = []
 
-    user_question = st.text_input("Ask a Question from the Files")
+    if ("last_sources" not in st.session_state):
+        st.session_state.last_sources = []
 
+    user_question = st.text_input("Ask a Question from the Files")
     
+    graph = StateGraph(GraphState)
+
+    graph.add_node("router", router_node)
+
+    graph.add_node("hr_node", hr_node)
+
+    graph.add_node("casual_node", casual_node)
+    
+    graph.add_conditional_edges(
+    "router",
+    route_decision,
+    {
+        "hr_node": "hr_node",
+        "casual_node": "casual_node"
+    }
+    )
+
+    graph.add_edge("hr_node", END)
+
+    graph.add_edge("casual_node", END)
+
+    graph.set_entry_point("router")
+
+    app = graph.compile()
+
     with st.sidebar:
         st.title("Update Or Create Vector Store:")
         
@@ -284,11 +458,14 @@ def main():
                 st.success("Done")
 
     if st.button("LLM Output"):
+        st.session_state.last_sources = []
         with st.spinner("Processing..."):
-            faiss_index = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-            
-            #faiss_index = get_vector_store(docs)
-            result = get_response_llm(faiss_index, user_question, st.session_state.chat_history)
+            result = app.invoke(
+            {
+                "question": user_question,
+                "chat_history": st.session_state.chat_history
+            }
+            )
             st.session_state.chat_history.extend(
             [
             HumanMessage(content=user_question),
@@ -302,9 +479,10 @@ def main():
 
             st.subheader("Answer")
             st.write(result["answer"])
-            st.subheader("Sources")
-            for source in result["sources"]:
-                st.write(f"📄 {source}")
+            if result["sources"]:
+                st.subheader("Sources")
+                for source in st.session_state.last_sources:
+                    st.write(f"📄 {source}")
             st.success("Done")
 
 if __name__ == "__main__":
