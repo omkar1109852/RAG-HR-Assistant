@@ -247,7 +247,7 @@ START
   ↓
 Router Node
   ↓
- ┌─────────────┬─────────────┐
+ ┌─────────────┬
  │             │
 HR Query   Casual Query
  │             │
