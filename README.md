@@ -710,25 +710,27 @@ This reduces the risk of answering HR policy questions without retrieval.
 
 ### Relevance Score
 
-To improve transparency, the assistant displays a relevance score for each retrieved source.
+The assistant displays a relevance score for each retrieved source to provide visibility into the retrieval process.
 
-The score is based on the semantic similarity between the user's standalone query and the retrieved document chunk. FAISS returns a distance value, which is converted into a percentage using:
+After the user's question is rewritten into a standalone query by the History-Aware Retriever, embeddings are generated for both the query and the retrieved document chunks. The relevance score is then computed using **cosine similarity**:
 
 ```python
-relevance_score = exp(-distance) * 100
+relevance_score = cosine_similarity(
+    query_embedding,
+    chunk_embedding
+) * 100
 ```
 
-Lower distances produce higher relevance scores.
+Cosine similarity measures the semantic closeness between the query and the retrieved content, where higher values indicate stronger relevance.
 
 | Relevance Score | Interpretation |
 |----------------|----------------|
-| 90–100% | Very strong match |
-| 70–90% | Strong match |
-| 50–70% | Moderate match |
-| Below 50% | Weak match |
+| 90–100% | Very strong semantic match |
+| 75–90% | Strong semantic match |
+| 60–75% | Moderate semantic match |
+| Below 60% | Weak semantic match |
 
-> Note: The relevance score measures retrieval quality, not answer correctness. It indicates how closely the retrieved content matches the user's query.
-
+> The relevance score reflects how closely the retrieved document matches the query and should not be interpreted as a measure of answer correctness.
 ---
 
 ## Key Learnings
