@@ -422,51 +422,149 @@ This reduces the risk of answering HR policy questions without retrieval.
 
 ---
 
+## Phase 4+ – Agentic Web Search Integration
+
+### Objective
+
+Extend the LangGraph workflow by introducing an agent capable of retrieving and synthesizing up-to-date information from the web.
+
+The original Phase 4 implementation routed queries between HR document retrieval and casual conversation. This extension adds a third path for questions that require current or external information beyond the HR knowledge base.
+
+---
+
+## Updated Architecture
+
+```text
+START
+  ↓
+Router Node
+  ↓
+ ┌─────────────┬─────────────┬
+ │             │             │
+HR Query   Casual Query   Web Query
+ │             │             │
+ ↓             ↓             ↓
+HR Node    Casual Node   Web Agent Node
+ │             │             │
+ │             │      Tavily Search Tool
+ │             │             │
+ └──────┬──────┴──────┬──────┘
+        ↓             ↓
+              END
+```
+
+---
+
+## Query Routing
+
+The router now classifies incoming queries into three categories:
+
+| Route | Description |
+|---------|---------|
+| `hr` | HR policies, benefits, compensation, leave programs, workplace rules |
+| `casual` | Greetings, small talk, conversation-history questions |
+| `web` | Current events, news, sports, weather, market data, recent developments |
+
+Examples:
+
+| Query | Route |
+|---------|---------|
+| What is bonus eligible earnings? | HR |
+| How many caregiver leave days do I get? | HR |
+| Hello | Casual |
+| What was the first question I asked? | Casual |
+| Who won Wimbledon this year? | Web |
+| What is the latest OpenAI model? | Web |
+| What is today's gold price? | Web |
+
+---
+
+## Web Agent Node
+
+The Web Agent Node is responsible for answering questions that require up-to-date information.
+
+Unlike the HR and Casual nodes, which follow deterministic workflows, the Web Node uses an agent capable of tool usage.
+
+Workflow:
+
+```text
+User Question
+      ↓
+Web Agent
+      ↓
+Decide Whether Search Is Required
+      ↓
+Tavily Search Tool
+      ↓
+Search Results
+      ↓
+LLM Synthesis
+      ↓
+Final Answer
+```
+
+The agent can:
+
+- Search the web for current information
+- Summarize multiple search results
+- Maintain conversational context using shared chat history
+- Generate grounded responses based on retrieved information
+
+---
+
+## Tavily Search Integration
+
+The web-search capability is powered by the Tavily Search API.
+
+Benefits:
+
+- Optimized for LLM and agent workflows
+- Returns concise and relevant search results
+- Provides current information unavailable in the local HR document corpus
+
+This enables the assistant to answer time-sensitive questions that would otherwise be outside the scope of the HR knowledge base.
+
+---
+
+## Shared Conversation State
+
+The Web Agent Node uses the same conversation state as the HR and Casual nodes.
+
+```python
+class GraphState(TypedDict):
+    question: str
+    answer: str
+    sources: list
+    chat_history: list
+    route: str
+```
+
+This allows users to move seamlessly between:
+
+- HR policy questions
+- General conversation
+- Current events and web-based queries
+
+without losing conversational context.
+
+---
+
 ## Key Learnings
 
-### LangChain vs LangGraph
-
-Phase 3 used a single retrieval pipeline:
-
-```text
-User
- ↓
-Retriever
- ↓
-LLM
- ↓
-Answer
-```
-
-Phase 4 introduces branching workflows:
-
-```text
-User
- ↓
-Router
- ↓
-HR? ──► Retrieval Pipeline
- │
- No
- ▼
-Conversation Pipeline
-```
-
-LangGraph enables:
-
-- Explicit workflow orchestration
-- Conditional routing
-- Shared state management
-- Multi-path execution
+- LangGraph enables routing between multiple specialized workflows.
+- Different query types benefit from different execution strategies.
+- Retrieval-Augmented Generation is well-suited for enterprise knowledge bases.
+- Tool-using agents are effective for answering questions that require current information.
+- Combining RAG, conversational memory, and web-search agents creates a more capable and flexible assistant.
 
 ---
 
 ## Outcome
 
-Successfully implemented an agentic HR assistant that:
+Successfully extended the assistant with an agentic web-search capability that:
 
-- Routes HR-related questions through Conversational RAG.
-- Routes non-HR questions through a conversational LLM path.
-- Maintains shared conversation history across all interactions.
-- Preserves source attribution for HR responses.
-- Demonstrates LangGraph-based orchestration and decision making.
+- Detects queries requiring external information.
+- Uses a web-search tool to retrieve current data.
+- Synthesizes search results into concise answers.
+- Maintains conversation history across all interaction types.
+- Demonstrates tool-using agent behavior within a LangGraph workflow.
