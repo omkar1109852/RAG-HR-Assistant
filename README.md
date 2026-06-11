@@ -5,6 +5,7 @@
 * Python 3.10+
 * OpenAI API Key
 * Groq API Key
+* Tavily API Key
 
 ---
 
@@ -101,6 +102,56 @@ Example questions:
 * How many annual leave days do employees receive?
 * What is the parental leave policy?
 * Are contractors eligible for company-authorized holidays?
+
+## Tavily Setup
+
+### API Key Setup
+
+Create a Tavily account and generate an API key:
+
+https://app.tavily.com
+
+Add the API key to your `.env` file:
+
+```env
+TAVILY_API_KEY=your_api_key_here
+```
+
+The application automatically loads the API key using:
+
+```python
+load_dotenv()
+```
+
+### Tool Configuration
+
+The Tavily search tool is configured as:
+
+```python
+from langchain_community.tools.tavily_search import TavilySearchResults
+
+web_tool = TavilySearchResults(
+    max_results=5
+)
+```
+
+The tool is then made available to the Web Agent Node, allowing the agent to retrieve current information from the internet when required.
+
+---
+
+## Why Tavily?
+
+The HR document corpus is limited to internal HR policies and cannot answer questions about:
+
+- Current events
+- News
+- Sports results
+- Financial markets
+- Product launches
+- Recent company announcements
+- Any information that changes over time
+
+Tavily enables the assistant to retrieve up-to-date information directly from the web and synthesize it into a response.
 
 ---
 
