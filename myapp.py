@@ -4,6 +4,9 @@ import sys
 from dotenv import load_dotenv
 import numpy as np
 from typing import TypedDict
+import math
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 #Data Ingestion
 from pathlib import Path
@@ -14,6 +17,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from pdf2image import convert_from_path
+from langchain_core.output_parsers import StrOutputParser
+from langchain_community.tools.tavily_search import TavilySearchResults
 import pytesseract
 
 # Vector Embedding And Vector Store
@@ -55,6 +60,9 @@ from langgraph.graph import StateGraph
 from langgraph.graph import END
 from pydantic import BaseModel, Field
 from typing import Literal
+
+#Agent
+from langchain.agents import create_agent
 
 ## Configure Tesseract
 pytesseract.pytesseract.tesseract_cmd = (
@@ -199,6 +207,9 @@ contextualize_q_prompt = (
     )
 )
 
+#Question with context to get confidence scores
+question_generator = (contextualize_q_prompt | llm | StrOutputParser())
+
 qa_prompt = (
     ChatPromptTemplate.from_messages(
         [
@@ -265,17 +276,36 @@ def get_response_llm(vectorstore_faiss, query, chat_history):
         }
     )
 
-    sources = list(
-        {
-            doc.metadata["filename"]
-            for doc in response["context"]
-        }
-    )
+    # Get similarity scores
+    standalone_question = question_generator.invoke({"input": query, "chat_history": chat_history})
+
+    docs_and_scores = (vectorstore_faiss.similarity_search_with_score(standalone_question, k=3))
+
+    query_embedding = embeddings.embed_query(standalone_question)
+
+    source_details = []
+
+    for doc, score in docs_and_scores:
+
+        chunk_embedding = embeddings.embed_query(doc.page_content)
+        similarity = cosine_similarity([query_embedding], [chunk_embedding])[0][0]
+        confidence = round(similarity * 100,2)
+        source_details.append(
+            {
+                "source": doc.metadata["filename"],
+                "confidence": round(confidence, 2)
+            }
+        )
 
     return {
         "answer": response["answer"],
-        "sources": sources
+        "sources": source_details
     }
+
+##Create Agent
+
+web_tool = TavilySearchResults(max_results=5)
+web_agent = create_agent(llm, [web_tool])
 
 ##Router Node
 
@@ -290,6 +320,7 @@ Return ONLY:
 
 hr
 casual
+web
 
 HR includes:
 - leave policies
@@ -306,6 +337,16 @@ HR includes:
 - PTO
 - jury duty
 - bereavement leave
+
+web includes:
+- current events
+- news
+- sports results
+- stock prices
+- weather
+- latest product launches
+- recent company announcements
+- information that may have changed recently
 
 Examples:
 
@@ -332,6 +373,22 @@ A: casual
 
 Q: What was the first question I asked?
 A: casual
+
+Q: Who won Wimbledon this year?
+A: web
+
+Q: What is the latest OpenAI model?
+A: web
+
+Q: What is today's gold price?
+A: web
+
+IMPORTANT:
+If there is ANY possibility that a query relates to an employee policy,
+benefit, compensation program, leave program, workplace rule, payroll,
+holiday, or HR document, classify it as hr.
+
+When uncertain, choose hr.
 
 User Question:
 {state["question"]}
@@ -400,14 +457,61 @@ def casual_node(state):
         "sources": []
     }
 
+def web_node(state):
+
+    messages = []
+
+    for msg in state["chat_history"]:
+
+        if isinstance(msg, HumanMessage):
+
+            messages.append(
+                (
+                    "user",
+                    msg.content
+                )
+            )
+
+        elif isinstance(msg, AIMessage):
+
+            messages.append(
+                (
+                    "assistant",
+                    msg.content
+                )
+            )
+
+    messages.append(
+        (
+            "user",
+            state["question"]
+        )
+    )
+
+    result = web_agent.invoke(
+        {
+            "messages": messages
+        }
+    )
+
+    answer = result["messages"][-1].content
+
+    return {
+        **state,
+        "answer": answer,
+        "sources": []
+    }
+
 ##Routing Function
 def route_decision(state):
 
     if state["route"] == "hr":
         return "hr_node"
 
-    return "casual_node"
+    elif state["route"] == "web":
+        return "web_node"
 
+    return "casual_node"
 
 
 def main():
@@ -430,19 +534,24 @@ def main():
     graph.add_node("hr_node", hr_node)
 
     graph.add_node("casual_node", casual_node)
+
+    graph.add_node("web_node", web_node)
     
     graph.add_conditional_edges(
     "router",
     route_decision,
     {
         "hr_node": "hr_node",
-        "casual_node": "casual_node"
+        "casual_node": "casual_node",
+        "web_node": "web_node"
     }
     )
 
     graph.add_edge("hr_node", END)
 
     graph.add_edge("casual_node", END)
+
+    graph.add_edge("web_node", END)
 
     graph.set_entry_point("router")
 
@@ -480,9 +589,13 @@ def main():
             st.subheader("Answer")
             st.write(result["answer"])
             if result["sources"]:
+
                 st.subheader("Sources")
-                for source in st.session_state.last_sources:
-                    st.write(f"📄 {source}")
+
+                for item in result["sources"]:
+                    st.write(f"📄 {item['source']}")
+                    st.write(f"Relevance Score: {item['confidence']}%")
+
             st.success("Done")
 
 if __name__ == "__main__":
