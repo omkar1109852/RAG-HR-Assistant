@@ -708,7 +708,7 @@ This reduces the risk of answering HR policy questions without retrieval.
 
 ---
 
-### Relevance Score
+## Relevance Score
 
 The assistant displays a relevance score for each retrieved source to provide visibility into the retrieval process.
 
