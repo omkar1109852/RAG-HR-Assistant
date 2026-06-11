@@ -21,3 +21,5 @@ pytesseract
 pymupdf4llm
 langchain-experimental
 langgraph
+tavily-python
+scikit-learn
