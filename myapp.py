@@ -4,6 +4,7 @@ import sys
 from dotenv import load_dotenv
 import numpy as np
 from typing import TypedDict
+import math
 
 #Data Ingestion
 from pathlib import Path
@@ -14,6 +15,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from pdf2image import convert_from_path
+from langchain_core.output_parsers import StrOutputParser
 import pytesseract
 
 # Vector Embedding And Vector Store
@@ -199,6 +201,9 @@ contextualize_q_prompt = (
     )
 )
 
+#Question with context to get confidence scores
+question_generator = (contextualize_q_prompt | llm | StrOutputParser())
+
 qa_prompt = (
     ChatPromptTemplate.from_messages(
         [
@@ -265,18 +270,29 @@ def get_response_llm(vectorstore_faiss, query, chat_history):
         }
     )
 
-    sources = list(
-        {
-            doc.metadata["filename"]
-            for doc in response["context"]
-        }
-    )
+    # Get similarity scores
+    standalone_question = question_generator.invoke({"input": query, "chat_history": chat_history})
+
+    docs_and_scores = (vectorstore_faiss.similarity_search_with_score(standalone_question, k=3))
+
+    source_details = []
+
+    for doc, score in docs_and_scores:
+
+        confidence = (math.exp(-score)* 100)
+        confidence = round(confidence, 2)
+
+        source_details.append(
+            {
+                "source": doc.metadata["filename"],
+                "confidence": round(confidence, 2)
+            }
+        )
 
     return {
         "answer": response["answer"],
-        "sources": sources
+        "sources": source_details
     }
-
 ##Router Node
 
 def router_node(state):
@@ -332,6 +348,13 @@ A: casual
 
 Q: What was the first question I asked?
 A: casual
+
+IMPORTANT:
+If there is ANY possibility that a query relates to an employee policy,
+benefit, compensation program, leave program, workplace rule, payroll,
+holiday, or HR document, classify it as hr.
+
+When uncertain, choose hr.
 
 User Question:
 {state["question"]}
@@ -480,9 +503,13 @@ def main():
             st.subheader("Answer")
             st.write(result["answer"])
             if result["sources"]:
+
                 st.subheader("Sources")
-                for source in st.session_state.last_sources:
-                    st.write(f"📄 {source}")
+
+                for item in result["sources"]:
+                    st.write(f"📄 {item['source']}")
+                    st.write(f"Relevance Score: {item['confidence']}%")
+
             st.success("Done")
 
 if __name__ == "__main__":
