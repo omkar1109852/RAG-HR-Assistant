@@ -422,6 +422,29 @@ This reduces the risk of answering HR policy questions without retrieval.
 
 ---
 
+### Relevance Score
+
+To improve transparency, the assistant displays a relevance score for each retrieved source.
+
+The score is based on the semantic similarity between the user's standalone query and the retrieved document chunk. FAISS returns a distance value, which is converted into a percentage using:
+
+```python
+relevance_score = exp(-distance) * 100
+```
+
+Lower distances produce higher relevance scores.
+
+| Relevance Score | Interpretation |
+|----------------|----------------|
+| 90–100% | Very strong match |
+| 70–90% | Strong match |
+| 50–70% | Moderate match |
+| Below 50% | Weak match |
+
+> Note: The relevance score measures retrieval quality, not answer correctness. It indicates how closely the retrieved content matches the user's query.
+
+---
+
 ## Key Learnings
 
 ### LangChain vs LangGraph
