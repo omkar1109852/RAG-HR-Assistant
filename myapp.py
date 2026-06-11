@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import numpy as np
 from typing import TypedDict
 import math
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 #Data Ingestion
 from pathlib import Path
@@ -275,13 +277,15 @@ def get_response_llm(vectorstore_faiss, query, chat_history):
 
     docs_and_scores = (vectorstore_faiss.similarity_search_with_score(standalone_question, k=3))
 
+    query_embedding = embeddings.embed_query(standalone_question)
+
     source_details = []
 
     for doc, score in docs_and_scores:
 
-        confidence = (math.exp(-score)* 100)
-        confidence = round(confidence, 2)
-
+        chunk_embedding = embeddings.embed_query(doc.page_content)
+        similarity = cosine_similarity([query_embedding], [chunk_embedding])[0][0]
+        confidence = round(similarity * 100,2)
         source_details.append(
             {
                 "source": doc.metadata["filename"],
@@ -293,6 +297,7 @@ def get_response_llm(vectorstore_faiss, query, chat_history):
         "answer": response["answer"],
         "sources": source_details
     }
+    
 ##Router Node
 
 def router_node(state):
